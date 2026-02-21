@@ -45,36 +45,37 @@ def get_headers():
         'Referer': 'https://stats.nba.com/'
     }
 
+from nba_api.stats.endpoints import leaguegamelog
+
 def fetch_live_player_logs(player_id, season='2025-26'):
     print(f"Fetching live up-to-date data for player ID {player_id}...")
     try:
-        logs = playergamelog.PlayerGameLog(
-            player_id=player_id,
-            season=season,
-            headers=get_headers(),
+        # We use LeagueGameLog instead of PlayerGameLog because it is extremely stable
+        # and doesn't time out. It also guarantees identical column schema to our historical data.
+        log = leaguegamelog.LeagueGameLog(
+            season=season, 
+            player_or_team_abbreviation='P', 
+            headers=get_headers(), 
             timeout=30
-        ).get_data_frames()[0]
-        return logs
+        )
+        df = log.get_data_frames()[0]
+        # Filter for just this player
+        player_df = df[df['PLAYER_ID'] == player_id].copy()
+        return player_df
     except Exception as e:
         print(f"Warning: Failed to fetch live data from API: {e}")
         return None
 
 def load_latest_features(player_id, master_df):
     """
-    Get the most recent game for the player, including fetching live data from the API
-    to ensure we have every game up to today. 
+    Get the most recent games for the player, fetch live data, and generate features 
+    for the UPCOMING game.
     """
-    # 1. Get historical data from master DF
-    player_history = master_df[master_df['PLAYER_ID'] == player_id].copy()
-    
-    # 2. Fetch live data for current season to get games missed by the last full ingestion
+    # 1. Fetch live data for current season to get games missed by the last full ingestion
     live_logs = fetch_live_player_logs(player_id)
     
-    # 3. Combine them. To ensure rolling averages calculate correctly, we need the raw logs 
-    # before feature engineering. But master_df is already engineered.
-    # Therefore we will pull the raw parquet for the player if it exists.
-    
-    player_name = nba_players = players.get_players()
+    # 2. Get the player's historical raw logs directly
+    nba_players = players.get_players()
     matched = [p for p in nba_players if p['id'] == player_id]
     p_name = matched[0]['full_name'].replace(' ', '_') if matched else "Unknown"
     
@@ -82,13 +83,13 @@ def load_latest_features(player_id, master_df):
     if os.path.exists(raw_file):
         raw_df = pd.read_parquet(raw_file)
     else:
-        print("Warning: Could not find raw historical game logs. Using only live data for features.")
+        print("Warning: Could not find raw historical game logs. Using only live data.")
         raw_df = pd.DataFrame()
         
-    # Combine historical raw with live raw
+    # 3. Combine historical raw with live raw
     if live_logs is not None and not live_logs.empty:
         combined_raw = pd.concat([raw_df, live_logs], ignore_index=True)
-        # Drop duplicates in case live data overlaps with historical data
+        # Sort and drop duplicates robustly based on standard GAME_ID
         combined_raw = combined_raw.drop_duplicates(subset=['GAME_ID'], keep='last')
     else:
         combined_raw = raw_df
@@ -96,12 +97,27 @@ def load_latest_features(player_id, master_df):
     if combined_raw.empty:
         return None
         
-    print(f"Engineering features across {len(combined_raw)} total career/season games...")
+    # Sort chronologically before appending dummy row
+    combined_raw['GAME_DATE'] = pd.to_datetime(combined_raw['GAME_DATE'])
+    combined_raw = combined_raw.sort_values('GAME_DATE').reset_index(drop=True)
     
-    # 4. Run feature engineering on the combined raw dataset
+    # 4. Create a dummy "Upcoming Game" row. 
+    # This forces features.py to calculate trailing averages (PTS_3g_avg, etc) 
+    # that correctly include the most recent game!
+    dummy_row = combined_raw.iloc[-1:].copy()
+    dummy_row['GAME_ID'] = 'COMING_SOON'
+    # Set date to tomorrow relative to their last game
+    dummy_row['GAME_DATE'] = combined_raw['GAME_DATE'].iloc[-1] + pd.Timedelta(days=1)
+    dummy_row['MATCHUP'] = 'LAL vs. LAL' # Neutral default
+    
+    combined_raw = pd.concat([combined_raw, dummy_row], ignore_index=True)
+
+    print(f"Engineering features across {len(combined_raw)-1} historical games for next prediction...")
+    
+    # 5. Run feature engineering on the combined dataset
     engineered_df = engineered_features_for_player(combined_raw)
     
-    # 5. Get the very last row
+    # 6. Extract the dummy row (which now contains the accurate shifting averages)
     engineered_df = engineered_df.sort_values('GAME_DATE')
     latest_game = engineered_df.iloc[-1].copy()
     
@@ -113,19 +129,14 @@ def load_latest_features(player_id, master_df):
         'TRAVEL_DIST'
     ]
     
-    # Convert categorical to dummies conceptually for this single row
-    # We will just manually set them or extract them if they exist
     feat_dict = {}
     for f in features:
         feat_dict[f] = latest_game.get(f, 0)
         
-    # Handle the dummy columns that the model expects (e.g. TRAVEL_DIR_Westward, TZ_SHIFT_1)
-    # The engineered dataframe has "TRAVEL_DIR" and "TZ_SHIFT" as categorical strings currently
+    # Handle the dummy columns that the model expects
     travel_dir = latest_game.get('TRAVEL_DIR', 'None')
     tz_shift = latest_game.get('TZ_SHIFT', '0')
     
-    # We will initialize all possible dummy columns to 0 later in predict_player_points,
-    # but we need to set the *active* one to 1 here.
     feat_dict[f'TRAVEL_DIR_{travel_dir}'] = 1
     feat_dict[f'TZ_SHIFT_{tz_shift}'] = 1
     
