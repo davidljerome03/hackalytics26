@@ -1,2 +1,6 @@
 nba_api
 pandas
+scikit-learn
+xgboost
+shap
+pyarrow

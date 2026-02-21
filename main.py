@@ -1,23 +1,32 @@
-from nba_api.stats.static import players
-from nba_api.stats.endpoints import playercareerstats
-import pandas as pd
 import time
+from ingestion import run_ingestion
+from features import process_all_files
+from model import train_and_evaluate
 
-# 1. Reuse the headers to avoid timeouts
-custom_headers = {
-    'Host': 'stats.nba.com',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:72.0) Gecko/20100101 Firefox/72.0',
-    'Referer': 'https://stats.nba.com/',
-}
+def main():
+    print("="*50)
+    print("NBA Player Props Predictive Model Pipeline")
+    print("="*50)
+    
+    # Phase 1: Data Ingestion
+    print("\n[PHASE 1] Data Ingestion")
+    start_time = time.time()
+    run_ingestion()
+    print(f"Phase 1 completed in {time.time() - start_time:.2f} seconds.")
+    
+    # Phase 2: Feature Engineering
+    print("\n[PHASE 2] Feature Engineering")
+    start_time = time.time()
+    process_all_files()
+    print(f"Phase 2 completed in {time.time() - start_time:.2f} seconds.")
+    
+    # Phase 3: Machine Learning
+    print("\n[PHASE 3] Machine Learning & Validation")
+    start_time = time.time()
+    train_and_evaluate(target='PTS')
+    print(f"Phase 3 completed in {time.time() - start_time:.2f} seconds.")
+    
+    print("\nPipeline execution finished successfully.")
 
-
-nba_players = players.get_players()
-
-active_players = [p for p in nba_players if p['is_active']]
-
-active_players.sort(key=lambda x: x['full_name'])
-
-for p in active_players:
-    print(p['full_name'])
-
-
+if __name__ == "__main__":
+    main()
