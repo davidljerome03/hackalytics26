@@ -79,7 +79,7 @@ def fetch_live_player_logs(player_id, season='2025-26'):
                 
     return None
 
-def load_latest_features(player_id, master_df):
+def load_latest_features(player_id, master_df, next_opponent='LAL'):
     """
     Get the most recent games for the player, fetch live data, and generate features 
     for the UPCOMING game.
@@ -121,11 +121,13 @@ def load_latest_features(player_id, master_df):
     dummy_row['GAME_ID'] = 'COMING_SOON'
     # Set date to tomorrow relative to their last game
     dummy_row['GAME_DATE'] = combined_raw['GAME_DATE'].iloc[-1] + pd.Timedelta(days=1)
-    dummy_row['MATCHUP'] = 'LAL vs. LAL' # Neutral default
+    
+    # Use the requested opponent abbreviation! E.g., 'LAL vs. BOS' meaning playing Boston at home
+    dummy_row['MATCHUP'] = f"LAL vs. {next_opponent}"
     
     combined_raw = pd.concat([combined_raw, dummy_row], ignore_index=True)
 
-    print(f"Engineering features across {len(combined_raw)-1} historical games for next prediction...")
+    print(f"Engineering features across {len(combined_raw)-1} historical games against test opponent {next_opponent}...")
     
     # 5. Run feature engineering on the combined dataset
     engineered_df = engineered_features_for_player(combined_raw)
@@ -142,6 +144,11 @@ def load_latest_features(player_id, master_df):
         'TRAVEL_DIST'
     ]
     
+    opp_features = ['OPP_PACE', 'OPP_DEF_RATING', 'OPP_EFG_PCT', 'OPP_TM_TOV_PCT', 'OPP_DREB_PCT']
+    for opp_f in opp_features:
+        if opp_f in latest_game:
+            features.append(opp_f)
+    
     feat_dict = {}
     for f in features:
         feat_dict[f] = latest_game.get(f, 0)
@@ -149,9 +156,16 @@ def load_latest_features(player_id, master_df):
     # Handle the dummy columns that the model expects
     travel_dir = latest_game.get('TRAVEL_DIR', 'None')
     tz_shift = latest_game.get('TZ_SHIFT', '0')
+    opp_arch = latest_game.get('OPP_ARCHETYPE', 'None')
     
     feat_dict[f'TRAVEL_DIR_{travel_dir}'] = 1
     feat_dict[f'TZ_SHIFT_{tz_shift}'] = 1
+    if pd.notna(opp_arch) and opp_arch != 'None':
+        feat_dict[f'OPP_ARCHETYPE_{opp_arch}'] = 1
+        
+    print(f"[DEBUG] Opponent: {next_opponent} | Archetype Loaded: {opp_arch}")
+    for opp_f in opp_features:
+        print(f"[DEBUG] {opp_f}: {feat_dict.get(opp_f, 'MISSING')}")
     
     return pd.DataFrame([feat_dict])
 
@@ -163,20 +177,10 @@ def train_and_save_model():
     print("Training production model on complete dataset...")
     df = pd.read_parquet(MASTER_FILE)
     
-    # This logic matches model.py prep_for_modeling
-    cols_to_check = ['PTS', 'PTS_3g_avg', 'PTS_5g_avg', 'PTS_10g_avg']
-    df_clean = df.dropna(subset=cols_to_check).copy()
-    df_clean = pd.get_dummies(df_clean, columns=['TRAVEL_DIR', 'TZ_SHIFT'], drop_first=True)
-    
-    features = ['PTS_3g_avg', 'PTS_5g_avg', 'PTS_10g_avg', 'B2B_FLAG', 'GAMES_LAST_7D', 'ALTITUDE', 'HIGH_ALTITUDE_FLAG', 'TRAVEL_DIST']
-    for col in df_clean.columns:
-        if col.startswith('TRAVEL_DIR_') or col.startswith('TZ_SHIFT_'):
-            features.append(col)
-            
-    df_clean = df_clean.dropna(subset=features)
-    
-    X = df_clean[features]
-    y = df_clean['PTS']
+    import model as mdl
+    X, y, _ = mdl.prep_for_modeling(df, target_col='PTS')
+    features = list(X.columns)
+
     
     model = XGBRegressor(n_estimators=100, max_depth=5, learning_rate=0.1, random_state=42, n_jobs=-1)
     model.fit(X, y)
@@ -186,7 +190,45 @@ def train_and_save_model():
     print(f"Model saved to {MODEL_FILE}")
     return model, features
 
-def predict_player_points(player_name):
+from nba_api.stats.endpoints import playernextngames
+
+def get_next_opponent(player_id):
+    """Fetches the player's true next scheduled opponent abbreviation from the NBA API."""
+    print("Finding the player's next scheduled opponent...")
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            log = playernextngames.PlayerNextNGames(
+                player_id=player_id, 
+                number_of_games=1, 
+                headers=get_headers(), 
+                timeout=5
+            )
+            df = log.get_data_frames()[0]
+            if not df.empty:
+                # Matchup format is usually e.g. "LAL vs. BOS" or "LAL @ DEN"
+                matchup = df['GAME_DATE'].iloc[0] # Note: the endpoint puts the matchup text in different columns sometimes
+                # Let's cleanly grab it from the standard opponent abbreviation columns if they exist
+                if 'VS_TEAM_ABBREVIATION' in df.columns:
+                    return df['VS_TEAM_ABBREVIATION'].iloc[0]
+                
+                # Fallback text parsing if the column is missing
+                for col in df.columns:
+                    val = str(df[col].iloc[0])
+                    if ' vs. ' in val: return val.split(' vs. ')[1][:3]
+                    if ' @ ' in val: return val.split(' @ ')[1][:3]
+            return None
+                    
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(1)
+            else:
+                pass
+                
+    return None
+
+
+def predict_player_points(player_name, next_opponent=None):
     # Load data
     if not os.path.exists(MASTER_FILE):
         print(f"File {MASTER_FILE} not found. You must run main.py first to build the dataset.")
@@ -194,13 +236,28 @@ def predict_player_points(player_name):
         
     df = pd.read_parquet(MASTER_FILE)
     # Apply dummy encoding immediately so load_latest_features can find them
-    df = pd.get_dummies(df, columns=['TRAVEL_DIR', 'TZ_SHIFT'], drop_first=True)
+    dummy_cols = ['TRAVEL_DIR', 'TZ_SHIFT']
+    if 'OPP_ARCHETYPE' in df.columns:
+        dummy_cols.append('OPP_ARCHETYPE')
+    df = pd.get_dummies(df, columns=dummy_cols, drop_first=True)
     
     # Find player
     player_id = get_player_id(player_name)
     if not player_id:
         print(f"Could not find exact match for player: {player_name}")
         return
+        
+    # Automatically get the next opponent if not strictly provided
+    if not next_opponent:
+        next_opponent = get_next_opponent(player_id)
+        if not next_opponent:
+            print(f"\n[!] The live NBA API is currently rate-limiting your connection.")
+            print(f"    Could not automatically fetch the schedule for {player_name}.")
+            print(f"    Please manually provide their opponent's 3-letter abbreviation to bypass this.")
+            print(f"    Example: python predict.py \"{player_name}\" HOU\n")
+            return
+            
+        print(f"-> Automatically detected next opponent: {next_opponent}")
         
     # Try to load model, if it doesn't exist, train it
     if os.path.exists(MODEL_FILE):
@@ -212,7 +269,7 @@ def predict_player_points(player_name):
         model, expected_features = train_and_save_model()
         
     # Get player's latest features
-    X_pred = load_latest_features(player_id, df)
+    X_pred = load_latest_features(player_id, df, next_opponent)
     
     if X_pred is None:
         print(f"No valid historical data found for {player_name} to base a prediction on.")
@@ -227,6 +284,10 @@ def predict_player_points(player_name):
     # Order columns exactly as the model expects
     X_pred = X_pred[expected_features]
     
+    print("\n[DEBUG] Final features passed to XGBoost:")
+    for col in X_pred.columns:
+        print(f"  {col}: {X_pred[col].iloc[0]}")
+    
     # Predict
     prediction = model.predict(X_pred)[0]
     
@@ -234,7 +295,7 @@ def predict_player_points(player_name):
     baseline = X_pred['PTS_5g_avg'].iloc[0]
     
     print("\n" + "="*50)
-    print(f" PREDICTION FOR: {player_name.upper()}")
+    print(f" PREDICTION FOR: {player_name.upper()} vs {next_opponent}")
     print("="*50)
     print(f" Baseline (Last 5 Games Avg): {baseline:.1f} PTS")
     print(f" XGBoost Model Prediction:    {prediction:.1f} PTS")
@@ -243,8 +304,14 @@ def predict_player_points(player_name):
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
+        # Check if the last argument is exactly a 3 letter abbreviation
         player = " ".join(sys.argv[1:])
-        predict_player_points(player)
+        opponent = None
+        if len(sys.argv) >= 3 and len(sys.argv[-1]) == 3 and sys.argv[-1].isupper():
+            opponent = sys.argv[-1]
+            player = " ".join(sys.argv[1:-1])
+            
+        predict_player_points(player, opponent)
     else:
-        print("Usage: python predict.py \"Player Name\"")
+        print("Usage: python predict.py \"Player Name\" [OPTIONAL_OPPONENT_ABBR]")
         print("Example: python predict.py \"LeBron James\"")

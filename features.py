@@ -150,6 +150,56 @@ def engineered_features_for_player(df):
         
     df['TZ_SHIFT'] = df.apply(calc_tz_shift, axis=1)
     
+    # -------------------------------------------------------------
+    # OPTION A: Team-Level Defensive Archetypes
+    # -------------------------------------------------------------
+    team_cache_file = os.path.join(PROCESSED_DATA_DIR, "team_clusters.parquet")
+    if os.path.exists(team_cache_file):
+        try:
+            from nba_api.stats.static import teams
+            nba_teams = teams.get_teams()
+            abbr_to_id = {t['abbreviation']: t['id'] for t in nba_teams}
+            
+            def get_season_str(date_obj):
+                year = date_obj.year
+                if date_obj.month >= 10:
+                    return f"{year}-{str(year+1)[-2:]}"
+                else:
+                    return f"{year-1}-{str(year)[-2:]}"
+                    
+            df['SEASON'] = df['GAME_DATE'].apply(get_season_str)
+            
+            def get_opp_abbr(row):
+                matchup = row.get('MATCHUP', '')
+                if ' @ ' in matchup:
+                    return matchup.split(' @ ')[1].strip()
+                elif ' vs. ' in matchup:
+                    return matchup.split(' vs. ')[1].strip()
+                return ''
+                
+            df['OPP_ABBR'] = df.apply(get_opp_abbr, axis=1)
+            df['OPP_TEAM_ID'] = df['OPP_ABBR'].map(abbr_to_id)
+            
+            team_df = pd.read_parquet(team_cache_file)
+            # Prefix the metric columns so we know they are the opponent's
+            rename_dict = {}
+            for col in team_df.columns:
+                if col not in ['TEAM_ID', 'TEAM_NAME', 'SEASON', 'OPP_ARCHETYPE']:
+                    rename_dict[col] = f"OPP_{col}"
+            team_df = team_df.rename(columns=rename_dict)
+            
+            # Merge on Opponent Team ID and Season
+            df = pd.merge(
+                df, 
+                team_df.drop(columns=['TEAM_NAME'], errors='ignore'), 
+                left_on=['OPP_TEAM_ID', 'SEASON'], 
+                right_on=['TEAM_ID', 'SEASON'], 
+                how='left'
+            )
+            df = df.drop(columns=['TEAM_ID'], errors='ignore')
+        except Exception as e:
+            print(f"Warning: Failed to merge defensive archetypes: {e}")
+    
     return df
 
 

@@ -23,8 +23,12 @@ def prep_for_modeling(df, target_col='PTS'):
     cols_to_check = [target_col, f'{target_col}_3g_avg', f'{target_col}_5g_avg', f'{target_col}_10g_avg']
     df_clean = df.dropna(subset=cols_to_check).copy()
     
-    # We also need to map categorical text columns (e.g., TRAVEL_DIR, TZ_SHIFT) to dummies or drop
-    df_clean = pd.get_dummies(df_clean, columns=['TRAVEL_DIR', 'TZ_SHIFT'], drop_first=True)
+    # We also need to map categorical text columns to dummies or drop
+    dummy_cols = ['TRAVEL_DIR', 'TZ_SHIFT']
+    if 'OPP_ARCHETYPE' in df_clean.columns:
+        dummy_cols.append('OPP_ARCHETYPE')
+        
+    df_clean = pd.get_dummies(df_clean, columns=dummy_cols, drop_first=True)
     
     features = [
         f'{target_col}_3g_avg', f'{target_col}_5g_avg', f'{target_col}_10g_avg',
@@ -33,9 +37,15 @@ def prep_for_modeling(df, target_col='PTS'):
         'TRAVEL_DIST'
     ]
     
+    # Add optional opponent metrics if present
+    opp_features = ['OPP_PACE', 'OPP_DEF_RATING', 'OPP_EFG_PCT', 'OPP_TM_TOV_PCT', 'OPP_DREB_PCT']
+    for opp_f in opp_features:
+        if opp_f in df_clean.columns:
+            features.append(opp_f)
+            
     # Add dummy columns that were generated
     for col in df_clean.columns:
-        if col.startswith('TRAVEL_DIR_') or col.startswith('TZ_SHIFT_'):
+        if col.startswith('TRAVEL_DIR_') or col.startswith('TZ_SHIFT_') or col.startswith('OPP_ARCHETYPE_'):
             features.append(col)
             
     # Ensure all features handle NaNs (e.g., from first games without prev lag)
