@@ -8,6 +8,15 @@ let currentFilter = 'today';
 let currentProjStat = 'PTS';
 let searchQuery = '';
 
+// Pagination State
+let currentGamesPage = 1;
+const GAMES_PER_PAGE = 5;
+
+// Slideshow State
+const slideshowCategories = ['PTS', 'REB', 'AST', 'PRA'];
+let currentSlideIndex = 0;
+let slideshowInterval = null;
+
 async function initDashboard() {
     try {
         await Promise.all([
@@ -61,9 +70,26 @@ function setupEventListeners() {
             tabs.forEach(t => t.classList.remove('active'));
             e.target.classList.add('active');
             currentFilter = e.target.dataset.filter;
+            currentGamesPage = 1; // Reset page on tab switch
             renderGames();
         });
     });
+
+    // Pagination Listeners
+    const prevBtn = document.getElementById('prev-page');
+    const nextBtn = document.getElementById('next-page');
+    if (prevBtn && nextBtn) {
+        prevBtn.addEventListener('click', () => {
+            if (currentGamesPage > 1) {
+                currentGamesPage--;
+                renderGames();
+            }
+        });
+        nextBtn.addEventListener('click', () => {
+            currentGamesPage++;
+            renderGames();
+        });
+    }
 
     // SPA Navigation
     const navBtns = document.querySelectorAll('.nav-btn');
@@ -102,6 +128,7 @@ function renderDashboard() {
     renderMetrics();
     renderGames();
     renderProjections();
+    startSlideshow();
 }
 
 // Dynamically pick the earliest date that has games as "Today"
@@ -206,7 +233,26 @@ function renderGames() {
         return parseTime(a.GAME_TIME) - parseTime(b.GAME_TIME);
     });
 
-    gamesList.innerHTML = filteredGames.slice(0, 15).map(g => {
+    // Pagination Logic
+    const totalPages = Math.ceil(filteredGames.length / GAMES_PER_PAGE);
+    if (currentGamesPage > totalPages && totalPages > 0) {
+        currentGamesPage = totalPages;
+    }
+
+    const prevBtn = document.getElementById('prev-page');
+    const nextBtn = document.getElementById('next-page');
+    const pageIndicator = document.getElementById('page-indicator');
+
+    if (prevBtn && nextBtn && pageIndicator) {
+        prevBtn.disabled = currentGamesPage <= 1;
+        nextBtn.disabled = currentGamesPage >= totalPages;
+        pageIndicator.textContent = `${totalPages > 0 ? currentGamesPage : 0} / ${totalPages}`;
+    }
+
+    const startIndex = (currentGamesPage - 1) * GAMES_PER_PAGE;
+    const paginatedGames = filteredGames.slice(startIndex, startIndex + GAMES_PER_PAGE);
+
+    gamesList.innerHTML = paginatedGames.map(g => {
         const isToday = g.GAME_DATE === todayStr;
         return `
             <div class="game-card">
@@ -231,15 +277,16 @@ function renderProjections() {
     renderProjectionList(document.getElementById('full-players-list'), 100);
 }
 
-function renderProjectionList(container, limit) {
+function renderProjectionList(container, limit, overrideStat = null) {
     if (!container) return;
 
-    const statCol = `PREDICTED_${currentProjStat}`;
+    const activeStat = overrideStat || currentProjStat;
+    const statCol = `PREDICTED_${activeStat}`;
 
     // Ensure players have data for this stat
     let validPlayers = projectionsData.filter(p => !isNaN(parseFloat(p[statCol])));
 
-    if (searchQuery) {
+    if (searchQuery && !overrideStat) { // Don't filter slideshow by search
         validPlayers = validPlayers.filter(p => p.PLAYER_NAME.toLowerCase().includes(searchQuery));
     }
 
@@ -261,13 +308,13 @@ function renderProjectionList(container, limit) {
         let primaryVal = 0, primaryLabel = '';
         let microStats = [];
 
-        if (currentProjStat === 'PTS') {
+        if (activeStat === 'PTS') {
             primaryVal = pPts; primaryLabel = 'PTS';
             microStats = [{ l: 'REB', v: pReb }, { l: 'AST', v: pAst }, { l: 'PRA', v: pPra }];
-        } else if (currentProjStat === 'REB') {
+        } else if (activeStat === 'REB') {
             primaryVal = pReb; primaryLabel = 'REB';
             microStats = [{ l: 'PTS', v: pPts }, { l: 'AST', v: pAst }, { l: 'PRA', v: pPra }];
-        } else if (currentProjStat === 'AST') {
+        } else if (activeStat === 'AST') {
             primaryVal = pAst; primaryLabel = 'AST';
             microStats = [{ l: 'PTS', v: pPts }, { l: 'REB', v: pReb }, { l: 'PRA', v: pPra }];
         } else {
@@ -293,11 +340,64 @@ function renderProjectionList(container, limit) {
                 </div>
                 <div class="player-stats">
                     <div class="stat-primary">${primaryVal} ${primaryLabel}</div>
-                    <div class="stat-secondary" style="color: ${currentProjStat === 'PTS' ? diffColor : 'var(--text-secondary)'}">
-                        ${currentProjStat === 'PTS' ? (diff == 0 ? 'Avg Match' : `${diffText} proj diff`) : ''}
+                    <div class="stat-secondary" style="color: ${activeStat === 'PTS' ? diffColor : 'var(--text-secondary)'}">
+                        ${activeStat === 'PTS' ? (diff == 0 ? 'Avg Match' : `${diffText} proj diff`) : ''}
                     </div>
                 </div>
             </div>
         `;
     }).join('');
+}
+
+// --- Slideshow Logic ---
+function startSlideshow() {
+    if (slideshowInterval) clearInterval(slideshowInterval);
+    renderSlideshowTick();
+    slideshowInterval = setInterval(() => {
+        currentSlideIndex = (currentSlideIndex + 1) % slideshowCategories.length;
+        renderSlideshowTick();
+    }, 5000); // Rotate every 5 seconds
+}
+
+function renderSlideshowTick() {
+    const listEl = document.getElementById('slideshow-players-list');
+    const titleEl = document.getElementById('slideshow-title');
+    const progressEl = document.getElementById('slideshow-progress');
+
+    if (!listEl || !titleEl) return;
+
+    const stat = slideshowCategories[currentSlideIndex];
+    let label = stat;
+    if (stat === 'PTS') label = 'Points (PTS)';
+    if (stat === 'REB') label = 'Rebounds (REB)';
+    if (stat === 'AST') label = 'Assists (AST)';
+    if (stat === 'PRA') label = 'PRA';
+
+    // Fade out
+    listEl.style.opacity = '0';
+    listEl.style.transform = 'translateY(5px)';
+
+    // Reset progress bar animation
+    if (progressEl) {
+        progressEl.style.transition = 'none';
+        progressEl.style.width = '0%';
+    }
+
+    setTimeout(() => {
+        // Update Title & DOM
+        titleEl.innerHTML = `Top 5 Projected <span>${label}</span>`;
+        renderProjectionList(listEl, 5, stat);
+
+        // Fade in
+        listEl.style.opacity = '1';
+        listEl.style.transform = 'translateY(0)';
+
+        // Start progress bar animation
+        if (progressEl) {
+            // Force reflow to ensure transition runs from 0
+            progressEl.offsetHeight;
+            progressEl.style.transition = 'width 5s linear';
+            progressEl.style.width = '100%';
+        }
+    }, 400); // 400ms CSS transition
 }

@@ -39,22 +39,48 @@
                 </section>
 
                 <!-- Bottom Section -->
-                <section class="games-section" style="margin-top: 2rem;">
-                    <div class="section-header">
-                        <h2>Schedules</h2>
-                        <p id="schedule-subtitle">Loading schedule data...</p>
-                    </div>
+                <div class="split-layout" style="margin-top: 2rem;">
+                    <!-- Left: Games -->
+                    <section class="games-section">
+                        <div class="section-header">
+                            <h2>Schedules</h2>
+                            <p id="schedule-subtitle">Loading schedule data...</p>
+                        </div>
 
-                    <div class="filter-tabs">
-                        <button class="tab active" data-filter="today" id="tab-today">Today's Games</button>
-                        <button class="tab" data-filter="upcoming" id="tab-upcoming">Upcoming</button>
-                    </div>
+                        <div class="filter-header"
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                            <div class="filter-tabs" style="margin-bottom: 0;">
+                                <button class="tab active" data-filter="today" id="tab-today">Today's Games</button>
+                                <button class="tab" data-filter="upcoming" id="tab-upcoming">Upcoming</button>
+                            </div>
+                            <div class="pagination-controls" style="display: flex; gap: 0.5rem; align-items: center;">
+                                <button id="prev-page" class="icon-btn" disabled>&larr;</button>
+                                <span id="page-indicator"
+                                    style="font-size: 0.9rem; color: var(--text-secondary); min-width: 50px; text-align: center;">1
+                                    / 1</span>
+                                <button id="next-page" class="icon-btn">&rarr;</button>
+                            </div>
+                        </div>
 
-                    <div class="games-list" id="games-list"
-                        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 1.5rem;">
-                        <!-- Injected via JS -->
-                    </div>
-                </section>
+                        <div class="games-list" id="games-list">
+                            <!-- Injected via JS -->
+                        </div>
+                    </section>
+
+                    <!-- Right: Slideshow Projections -->
+                    <section class="projections-slideshow">
+                        <div class="section-header">
+                            <h2 id="slideshow-title">Top 5 Projections</h2>
+                        </div>
+                        <div class="players-list slideshow-list" id="slideshow-players-list">
+                            <!-- Injected via JS -->
+                            <div class="loading-state">Loading projections...</div>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" id="slideshow-progress"></div>
+                        </div>
+                    </section>
+                </div>
             </div> <!-- End Dashboard View -->
 
             <!-- PROJECTIONS VIEW (Dedicated) -->
@@ -69,9 +95,9 @@
                         <input type="text" id="player-search" class="search-input" placeholder="Search players...">
                         <select id="full-proj-stat-filter" class="stat-filter-select">
                             <option value="PTS">Points (PTS)</option>
-                            <option value="PRA">PRA (Pts+Reb+Ast)</option>
                             <option value="REB">Rebounds (REB)</option>
                             <option value="AST">Assists (AST)</option>
+                            <option value="PRA">PRA (Pts+Reb+Ast)</option>
                         </select>
                     </div>
                     <!-- Reuse the same grid style but wider -->
