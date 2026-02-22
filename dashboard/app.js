@@ -67,7 +67,7 @@ const teamColors = {
     "SAC": { primary: "#5A2D81", nav: "#5A2D81", border: "#63727A", text: "#ffffff" },
     "SAS": { primary: "#000000", nav: "#000000", border: "#C4CED4", text: "#C4CED4" },
     "TOR": { primary: "#CE1141", nav: "#CE1141", border: "#000000", text: "#ffffff" },
-    "UTA": { primary: "#002B5C", nav: "#002B5C", border: "#F9A01B", text: "#F9A01B" },
+    "UTA": { primary: "#46227D", nav: "#46227D", border: "#7AC1E9", text: "#7AC1E9" },
     "WAS": { primary: "#002B5C", nav: "#002B5C", border: "#E31837", text: "#E31837" }
 };
 
