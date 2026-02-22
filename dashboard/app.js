@@ -38,6 +38,39 @@ const teamCities = {
     "TOR": "Toronto", "UTA": "Utah", "WAS": "Washington"
 };
 
+const teamColors = {
+    "ATL": { primary: "#e03a3e", nav: "#e03a3e", border: "#C1D32F", text: "#ffffff" },
+    "BOS": { primary: "#007A33", nav: "#007A33", border: "#BA9653", text: "#ffffff" },
+    "BKN": { primary: "#000000", nav: "#000000", border: "#777d84", text: "#ffffff" },
+    "CHA": { primary: "#1d1160", nav: "#1d1160", border: "#00788c", text: "#00788c" },
+    "CHI": { primary: "#ce1141", nav: "#ce1141", border: "#000000", text: "#ffffff" },
+    "CLE": { primary: "#860038", nav: "#860038", border: "#fdbb30", text: "#fdbb30" },
+    "DAL": { primary: "#00538c", nav: "#00538c", border: "#B8C4CA", text: "#ffffff" },
+    "DEN": { primary: "#0E2240", nav: "#0E2240", border: "#FEC524", text: "#FEC524" },
+    "DET": { primary: "#1d42ba", nav: "#1d42ba", border: "#C8102E", text: "#ffffff" },
+    "GSW": { primary: "#1D428A", nav: "#1D428A", border: "#ffc72c", text: "#ffc72c" },
+    "HOU": { primary: "#CE1141", nav: "#CE1141", border: "#000000", text: "#ffffff" },
+    "IND": { primary: "#002D62", nav: "#002D62", border: "#FDBB30", text: "#FDBB30" },
+    "LAC": { primary: "#1D428A", nav: "#1D428A", border: "#C8102E", text: "#ffffff" },
+    "LAL": { primary: "#552583", nav: "#552583", border: "#FDB927", text: "#FDB927" },
+    "MEM": { primary: "#12173F", nav: "#12173F", border: "#5D76A9", text: "#5D76A9" },
+    "MIA": { primary: "#98002B", nav: "#98002B", border: "#F9A01B", text: "#ffffff" },
+    "MIL": { primary: "#00471B", nav: "#00471B", border: "#eee1c6", text: "#eee1c6" },
+    "MIN": { primary: "#0C2340", nav: "#0C2340", border: "#236192", text: "#236192" },
+    "NOP": { primary: "#0C2340", nav: "#0C2340", border: "#C8102E", text: "#C8102E" },
+    "NYK": { primary: "#006BB6", nav: "#006BB6", border: "#F58426", text: "#F58426" },
+    "OKC": { primary: "#007AC1", nav: "#007AC1", border: "#EF3B24", text: "#EF3B24" },
+    "ORL": { primary: "#0077C0", nav: "#0077C0", border: "#C4CED4", text: "#ffffff" },
+    "PHI": { primary: "#006BB6", nav: "#006BB6", border: "#ED174C", text: "#ED174C" },
+    "PHX": { primary: "#1D1160", nav: "#1D1160", border: "#E56020", text: "#E56020" },
+    "POR": { primary: "#E03A3E", nav: "#E03A3E", border: "#000000", text: "#ffffff" },
+    "SAC": { primary: "#5A2D81", nav: "#5A2D81", border: "#63727A", text: "#ffffff" },
+    "SAS": { primary: "#000000", nav: "#000000", border: "#C4CED4", text: "#C4CED4" },
+    "TOR": { primary: "#CE1141", nav: "#CE1141", border: "#000000", text: "#ffffff" },
+    "UTA": { primary: "#002B5C", nav: "#002B5C", border: "#F9A01B", text: "#F9A01B" },
+    "WAS": { primary: "#002B5C", nav: "#002B5C", border: "#E31837", text: "#E31837" }
+};
+
 const espnLogos = {
     "GSW": "gs", "NOP": "no", "NYK": "ny", "SAS": "sa", "UTA": "utah", "WAS": "wsh"
 };
@@ -126,33 +159,89 @@ function setupEventListeners() {
         });
     }
 
-    // Theme Toggle
-    const themeBtn = document.getElementById('theme-toggle');
-    const lightIcon = document.getElementById('theme-icon-light');
-    const darkIcon = document.getElementById('theme-icon-dark');
+    // Settings Dropdown Logic
+    const toggleBtn = document.getElementById('settings-toggle');
+    const dropdown = document.getElementById('settings-dropdown');
+    const modeSelect = document.getElementById('mode-select');
+    const teamSelect = document.getElementById('team-select');
 
-    // Check saved preference
-    if (localStorage.getItem('theme') === 'dark') {
-        document.body.classList.add('dark-mode');
-        lightIcon.style.display = 'block';
-        darkIcon.style.display = 'none';
-    }
+    if (toggleBtn && dropdown) {
+        toggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+        });
 
-    if (themeBtn) {
-        themeBtn.addEventListener('click', () => {
-            document.body.classList.toggle('dark-mode');
-            const isDark = document.body.classList.contains('dark-mode');
-
-            localStorage.setItem('theme', isDark ? 'dark' : 'light');
-
-            if (isDark) {
-                lightIcon.style.display = 'block';
-                darkIcon.style.display = 'none';
-            } else {
-                lightIcon.style.display = 'none';
-                darkIcon.style.display = 'block';
+        document.addEventListener('click', (e) => {
+            if (!toggleBtn.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.style.display = 'none';
             }
         });
+    }
+
+    // Populate team select options
+    if (teamSelect) {
+        Object.entries(teamNames).sort((a, b) => a[1].localeCompare(b[1])).forEach(([tri, name]) => {
+            const opt = document.createElement('option');
+            opt.value = tri;
+            opt.textContent = `${teamCities[tri]} ${name}`;
+            teamSelect.appendChild(opt);
+        });
+    }
+
+    // Apply color mode
+    const applyColorMode = (mode) => {
+        if (mode === 'dark') {
+            document.body.classList.add('dark-mode');
+        } else {
+            document.body.classList.remove('dark-mode');
+        }
+        if (modeSelect) modeSelect.value = mode;
+        localStorage.setItem('theme', mode);
+    };
+
+    // Apply team theme override
+    const applyTeamTheme = (teamTheme) => {
+        const logoIcon = document.querySelector('.icon-bg .icon');
+        const logoBg = document.querySelector('.icon-bg');
+        if (teamTheme === 'default' || !teamColors[teamTheme]) {
+            document.documentElement.style.removeProperty('--accent-blue');
+            document.documentElement.style.removeProperty('--nav-bg');
+            document.documentElement.style.removeProperty('--nav-text');
+            document.documentElement.style.removeProperty('--team-border');
+            document.documentElement.style.removeProperty('--team-badge-bg');
+            document.documentElement.style.removeProperty('--team-metric-bg');
+            if (logoIcon) logoIcon.innerHTML = `<img src="default_logo.png" style="width: 34px; height: 34px; object-fit: contain; transform: scale(1.15);">`;
+            if (logoBg) logoBg.style.background = 'white';
+        } else {
+            document.documentElement.style.setProperty('--accent-blue', teamColors[teamTheme].primary);
+            document.documentElement.style.setProperty('--nav-bg', teamColors[teamTheme].nav);
+            document.documentElement.style.setProperty('--nav-text', teamColors[teamTheme].text);
+            document.documentElement.style.setProperty('--team-border', teamColors[teamTheme].border || teamColors[teamTheme].primary);
+            document.documentElement.style.setProperty('--team-badge-bg', teamColors[teamTheme].primary);
+            document.documentElement.style.setProperty('--team-metric-bg', teamColors[teamTheme].primary);
+
+            // Swap Top-Left Logo dynamically
+            const triLower = (espnLogos[teamTheme] || teamTheme).toLowerCase();
+            if (logoIcon) logoIcon.innerHTML = `<img src="https://a.espncdn.com/i/teamlogos/nba/500/scoreboard/${triLower}.png" style="width: 32px; height: 32px; object-fit: contain;">`;
+            if (logoBg) logoBg.style.background = 'white'; // Flat white provides best contrast for team logos
+        }
+        if (teamSelect) teamSelect.value = teamTheme;
+        localStorage.setItem('teamTheme', teamTheme);
+    };
+
+    // Load saved preferences on start
+    const savedMode = localStorage.getItem('theme') || 'light';
+    const savedTeam = localStorage.getItem('teamTheme') || 'default';
+
+    applyColorMode(savedMode);
+    applyTeamTheme(savedTeam);
+
+    // Listen to changes
+    if (modeSelect) {
+        modeSelect.addEventListener('change', (e) => applyColorMode(e.target.value));
+    }
+    if (teamSelect) {
+        teamSelect.addEventListener('change', (e) => applyTeamTheme(e.target.value));
     }
 
     // SPA Navigation
@@ -351,7 +440,7 @@ function renderGames() {
                     </div>
                 </div>
                 <div class="match-info">
-                    <div class="time-badge" style="padding: 0.5rem 1rem; ${!isToday ? 'background: var(--accent-blue);' : ''}">
+                    <div class="time-badge" style="${!isToday ? 'background: var(--team-badge-bg, var(--accent-blue));' : 'background: var(--team-badge-bg, var(--accent-purple));'} padding: 0.5rem 1rem;">
                         <div style="font-size: 1.1rem; font-weight: bold;">${g.GAME_TIME}</div>
                         <div style="font-size: 0.8rem; opacity: 0.8; margin-top: 0.1rem;">${g.GAME_DATE}</div>
                     </div>
@@ -463,8 +552,12 @@ function renderProjectionList(container, limit, overrideStat = null) {
             return `<div class="micro-stat" style="background: ${hue}; border-color: ${bd};">${m.l} <strong>${m.v}</strong></div>`;
         }).join('');
 
+        let trendColor = 'var(--border-color)';
+        if (activeDiff > 0) trendColor = '#10b981';
+        else if (activeDiff < 0) trendColor = '#ef4444';
+
         return `
-            <div class="player-card">
+            <div class="player-card" style="--card-trend-color: ${trendColor}">
                 <div class="player-info">
                     <h4>${p.PLAYER_NAME}</h4>
                     <p>${teamNames[p.TEAM.trim().toUpperCase()] || p.TEAM} vs ${teamNames[p.OPPONENT.trim().toUpperCase()] || p.OPPONENT}</p>
