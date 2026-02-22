@@ -55,20 +55,25 @@ def prep_for_modeling(df, target_col='PTS'):
     y = df_clean[target_col].astype(float)
     
     # Baseline projection: let's use the 5-game rolling average as our naive baseline
-    baseline_preds = df_clean[f'{target_col}_5g_avg']
-    
+    if f'{target_col}_5g_avg' in df_clean.columns:
+        baseline_preds = df_clean[f'{target_col}_5g_avg']
+    else:
+        baseline_preds = pd.Series([0]*len(df_clean), index=df_clean.index)
+        
     return X, y, baseline_preds
 
 def train_and_evaluate(target='PTS'):
+    print(f"\n{'='*50}")
     print(f"--- Training Model for Target: {target} ---")
+    print(f"{'='*50}")
     df = load_data()
-    if df is None: return
+    if df is None: return None
     
     X, y, baseline_preds = prep_for_modeling(df, target_col=target)
     
     if len(X) < 100:
-        print("Not enough data to train.")
-        return
+        print(f"Not enough data to train for {target}.")
+        return None
         
     # Temporal or random split. For MVP we can just do a random split, 
     # but temporal is safer against leakage. We'll stick to a simple train_test_split.
@@ -82,15 +87,7 @@ def train_and_evaluate(target='PTS'):
     base_rmse = np.sqrt(mean_squared_error(y_test, base_test))
     base_mae = mean_absolute_error(y_test, base_test)
     
-    # 1. Random Forest Regressor
-    rf_model = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_jobs=-1)
-    rf_model.fit(X_train, y_train)
-    rf_preds = rf_model.predict(X_test)
-    
-    rf_rmse = np.sqrt(mean_squared_error(y_test, rf_preds))
-    rf_mae = mean_absolute_error(y_test, rf_preds)
-    
-    # 2. XGBoost Regressor (Stretch goal)
+    # XGBoost Regressor
     xgb_model = XGBRegressor(n_estimators=100, max_depth=5, learning_rate=0.1, random_state=42, n_jobs=-1)
     xgb_model.fit(X_train, y_train)
     xgb_preds = xgb_model.predict(X_test)
@@ -100,27 +97,23 @@ def train_and_evaluate(target='PTS'):
     
     print("\n--- Evaluation Metrics vs Baseline ---")
     print(f"Baseline (5g avg) -> MAE: {base_mae:.2f} | RMSE: {base_rmse:.2f}")
-    print(f"Random Forest     -> MAE: {rf_mae:.2f} | RMSE: {rf_rmse:.2f}")
     print(f"XGBoost           -> MAE: {xgb_mae:.2f} | RMSE: {xgb_rmse:.2f}")
     
-    improvement_rf = ((base_mae - rf_mae) / base_mae) * 100
-    improvement_xgb = ((base_mae - xgb_mae) / base_mae) * 100
-    print(f"\nImprovement over Baseline MAE: RF = {improvement_rf:.1f}%, XGB = {improvement_xgb:.1f}%")
-    
-    # SHAP visualizer
-    print("\nGenerating SHAP summary plot for XGBoost model...")
-    try:
-        explainer = shap.Explainer(xgb_model, X_train)
-        shap_values = explainer(X_test)
+    if base_mae > 0:
+        improvement_xgb = ((base_mae - xgb_mae) / base_mae) * 100
+        print(f"\nImprovement over Baseline MAE: XGB = {improvement_xgb:.1f}%")
         
-        plt.figure(figsize=(10, 8))
-        shap.summary_plot(shap_values, X_test, feature_names=X_test.columns, show=False)
-        plot_path = f"shap_summary_{target}.png"
-        plt.savefig(plot_path, bbox_inches='tight')
-        plt.close()
-        print(f"Saved SHAP summary plot to {plot_path}")
-    except Exception as e:
-        print(f"Error generating SHAP plot: {e}")
+    # Save Model
+    import joblib
+    MODEL_FILE = os.path.join(PROCESSED_DATA_DIR, f"xgb_{target.lower()}_model.joblib")
+    features = list(X.columns)
+    joblib.dump({'model': xgb_model, 'features': features}, MODEL_FILE)
+    print(f"Saved {target} model to {MODEL_FILE}")
+
+def train_all_models():
+    targets = ['PTS', 'AST', 'REB', 'PRA']
+    for t in targets:
+        train_and_evaluate(target=t)
 
 if __name__ == "__main__":
-    train_and_evaluate(target='PTS')
+    train_all_models()

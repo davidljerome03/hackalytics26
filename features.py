@@ -65,13 +65,24 @@ def engineered_features_for_player(df):
     df['GAME_DATE'] = pd.to_datetime(df['GAME_DATE'])
     df = df.sort_values('GAME_DATE').reset_index(drop=True)
     
-    # Target variables: PTS and FG3M (3PM)
+    # Target variables: PTS, FG3M, AST, REB, and PRA (Points + Rebounds + Assists)
+    # Ensure they are numeric
+    for stat in ['PTS', 'REB', 'AST', 'FG3M']:
+        if stat in df.columns:
+            df[stat] = pd.to_numeric(df[stat], errors='coerce').fillna(0)
+            
+    # Create PRA if AST and REB exist
+    if 'AST' in df.columns and 'REB' in df.columns and 'PTS' in df.columns:
+        df['PRA'] = df['PTS'] + df['REB'] + df['AST']
+        
     # 1. Rolling averages (shifted to avoid leakage)
-    for target in ['PTS', 'FG3M']:
-        # shift by 1 to make sure current game stats are not included in rolling average
-        df[f'{target}_3g_avg'] = df[target].shift(1).rolling(window=3, min_periods=1).mean()
-        df[f'{target}_5g_avg'] = df[target].shift(1).rolling(window=5, min_periods=1).mean()
-        df[f'{target}_10g_avg'] = df[target].shift(1).rolling(window=10, min_periods=1).mean()
+    targets = ['PTS', 'FG3M', 'AST', 'REB', 'PRA']
+    for target in targets:
+        if target in df.columns:
+            # shift by 1 to make sure current game stats are not included in rolling average
+            df[f'{target}_3g_avg'] = df[target].shift(1).rolling(window=3, min_periods=1).mean()
+            df[f'{target}_5g_avg'] = df[target].shift(1).rolling(window=5, min_periods=1).mean()
+            df[f'{target}_10g_avg'] = df[target].shift(1).rolling(window=10, min_periods=1).mean()
         
     # 2. Fatigue Indicators
     df['DAYS_REST'] = df['GAME_DATE'].diff().dt.days

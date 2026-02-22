@@ -7,7 +7,9 @@ from nba_api.stats.static import players
 
 PROCESSED_DATA_DIR = "processed_data"
 MASTER_FILE = os.path.join(PROCESSED_DATA_DIR, "master_dataset.parquet")
-MODEL_FILE = os.path.join(PROCESSED_DATA_DIR, "xgb_pts_model.joblib")
+
+def get_model_file(target):
+    return os.path.join(PROCESSED_DATA_DIR, f"xgb_{target.lower()}_model.joblib")
 
 def get_player_id(player_name):
     nba_players = players.get_players()
@@ -137,20 +139,24 @@ def load_latest_features(player_id, master_df, next_opponent='LAL'):
     latest_game = engineered_df.iloc[-1].copy()
     
     # Extract only needed features
-    features = [
-        'PTS_3g_avg', 'PTS_5g_avg', 'PTS_10g_avg',
+    features_list = [
         'B2B_FLAG', 'GAMES_LAST_7D',
         'ALTITUDE', 'HIGH_ALTITUDE_FLAG',
         'TRAVEL_DIST'
     ]
     
+    # Add target features for all 4 targets
+    for t in ['PTS', 'AST', 'REB', 'PRA']:
+        if f'{t}_3g_avg' in latest_game:
+            features_list.extend([f'{t}_3g_avg', f'{t}_5g_avg', f'{t}_10g_avg'])
+    
     opp_features = ['OPP_PACE', 'OPP_DEF_RATING', 'OPP_EFG_PCT', 'OPP_TM_TOV_PCT', 'OPP_DREB_PCT']
     for opp_f in opp_features:
         if opp_f in latest_game:
-            features.append(opp_f)
+            features_list.append(opp_f)
     
     feat_dict = {}
-    for f in features:
+    for f in features_list:
         feat_dict[f] = latest_game.get(f, 0)
         
     # Handle the dummy columns that the model expects
@@ -217,7 +223,7 @@ def get_next_opponent(player_id):
                     val = str(df[col].iloc[0])
                     if ' vs. ' in val: return val.split(' vs. ')[1][:3]
                     if ' @ ' in val: return val.split(' @ ')[1][:3]
-            return None
+            break
                     
         except Exception as e:
             if attempt < max_retries - 1:
@@ -225,10 +231,25 @@ def get_next_opponent(player_id):
             else:
                 pass
                 
+    # Fallback to local projections/schedule data if API fails
+    try:
+        proj_csv = os.path.join("data", "upcoming_projections.csv")
+        if os.path.exists(proj_csv):
+            proj_df = pd.read_csv(proj_csv)
+            nba_players = players.get_players()
+            matched = [p for p in nba_players if p['id'] == player_id]
+            if matched:
+                p_name = matched[0]['full_name']
+                player_row = proj_df[proj_df['PLAYER_NAME'] == p_name]
+                if not player_row.empty:
+                    return player_row['OPPONENT'].iloc[0]
+    except Exception as e:
+        pass
+        
     return None
 
 
-def predict_player_points(player_name, next_opponent=None):
+def predict_player_points(player_name, next_opponent=None, target='PTS'):
     # Load data
     if not os.path.exists(MASTER_FILE):
         print(f"File {MASTER_FILE} not found. You must run main.py first to build the dataset.")
@@ -260,13 +281,15 @@ def predict_player_points(player_name, next_opponent=None):
         print(f"-> Automatically detected next opponent: {next_opponent}")
         
     # Try to load model, if it doesn't exist, train it
-    if os.path.exists(MODEL_FILE):
-        print("Loading existing model...")
-        saved_data = joblib.load(MODEL_FILE)
+    model_file = get_model_file(target)
+    if os.path.exists(model_file):
+        print(f"Loading existing {target} model...")
+        saved_data = joblib.load(model_file)
         model = saved_data['model']
         expected_features = saved_data['features']
     else:
-        model, expected_features = train_and_save_model()
+        print(f"No {target} model found. You must run model.py to train the models.")
+        return
         
     # Get player's latest features
     X_pred = load_latest_features(player_id, df, next_opponent)
@@ -292,26 +315,33 @@ def predict_player_points(player_name, next_opponent=None):
     prediction = model.predict(X_pred)[0]
     
     # Get their baseline (last 5 game average) for comparison
-    baseline = X_pred['PTS_5g_avg'].iloc[0]
+    baseline = X_pred.get(f'{target}_5g_avg', pd.Series([0]))
+    baseline_val = baseline.iloc[0] if not baseline.empty else 0
     
     print("\n" + "="*50)
-    print(f" PREDICTION FOR: {player_name.upper()} vs {next_opponent}")
+    print(f" PREDICTION FOR: {player_name.upper()} vs {next_opponent} ({target})")
     print("="*50)
-    print(f" Baseline (Last 5 Games Avg): {baseline:.1f} PTS")
-    print(f" XGBoost Model Prediction:    {prediction:.1f} PTS")
+    print(f" Baseline (Last 5 Games Avg): {baseline_val:.1f} {target}")
+    print(f" XGBoost Model Prediction:    {prediction:.1f} {target}")
     print("="*50 + "\n")
 
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
-        # Check if the last argument is exactly a 3 letter abbreviation
-        player = " ".join(sys.argv[1:])
+        kwargs = {}
+        # Parse optional target e.g. --target=AST
+        args = [arg for arg in sys.argv[1:] if not arg.startswith('--')]
+        target_arg = [arg.split('=')[1] for arg in sys.argv[1:] if arg.startswith('--target=')]
+        
+        target = target_arg[0].upper() if target_arg else 'PTS'
+        
+        player = " ".join(args)
         opponent = None
-        if len(sys.argv) >= 3 and len(sys.argv[-1]) == 3 and sys.argv[-1].isupper():
-            opponent = sys.argv[-1]
-            player = " ".join(sys.argv[1:-1])
+        if len(args) >= 2 and len(args[-1]) == 3 and args[-1].isupper():
+            opponent = args[-1]
+            player = " ".join(args[:-1])
             
-        predict_player_points(player, opponent)
+        predict_player_points(player, opponent, target=target)
     else:
-        print("Usage: python predict.py \"Player Name\" [OPTIONAL_OPPONENT_ABBR]")
-        print("Example: python predict.py \"LeBron James\"")
+        print("Usage: python predict.py \"Player Name\" [OPTIONAL_OPPONENT_ABBR] [--target=PTS|AST|REB|PRA]")
+        print("Example: python predict.py \"LeBron James\" --target=AST")
