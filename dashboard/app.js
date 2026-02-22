@@ -186,8 +186,12 @@ function renderGames() {
         return;
     }
 
-    // Sort games chronologically by tip-off time
+    // Sort games chronologically by date first, then by tip-off time
     filteredGames.sort((a, b) => {
+        if (a.GAME_DATE !== b.GAME_DATE) {
+            return a.GAME_DATE.localeCompare(b.GAME_DATE);
+        }
+
         const parseTime = (timeStr) => {
             if (!timeStr || timeStr === 'TBD' || timeStr.includes('undefined')) return 2400;
             let match = timeStr.match(/(\d+):(\d+)\s*(am|pm)/i);
