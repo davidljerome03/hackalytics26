@@ -210,8 +210,8 @@ function setupEventListeners() {
             document.documentElement.style.removeProperty('--team-border');
             document.documentElement.style.removeProperty('--team-badge-bg');
             document.documentElement.style.removeProperty('--team-metric-bg');
-            if (logoIcon) logoIcon.innerHTML = `<img src="default_logo.png" style="width: 34px; height: 34px; object-fit: contain; transform: scale(1.15);">`;
-            if (logoBg) logoBg.style.background = 'white';
+            if (logoIcon) logoIcon.innerHTML = `🏀`;
+            if (logoBg) logoBg.style.removeProperty('background');
         } else {
             document.documentElement.style.setProperty('--accent-blue', teamColors[teamTheme].primary);
             document.documentElement.style.setProperty('--nav-bg', teamColors[teamTheme].nav);
