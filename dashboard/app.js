@@ -18,6 +18,30 @@ const slideshowCategories = ['PTS', 'REB', 'AST', 'PRA'];
 let currentSlideIndex = 0;
 let slideshowInterval = null;
 
+const teamNames = {
+    "ATL": "Hawks", "BOS": "Celtics", "BKN": "Nets", "CHA": "Hornets", "CHI": "Bulls",
+    "CLE": "Cavaliers", "DAL": "Mavericks", "DEN": "Nuggets", "DET": "Pistons",
+    "GSW": "Warriors", "HOU": "Rockets", "IND": "Pacers", "LAC": "Clippers",
+    "LAL": "Lakers", "MEM": "Grizzlies", "MIA": "Heat", "MIL": "Bucks",
+    "MIN": "Timberwolves", "NOP": "Pelicans", "NYK": "Knicks", "OKC": "Thunder",
+    "ORL": "Magic", "PHI": "76ers", "PHX": "Suns", "POR": "Trail Blazers",
+    "SAC": "Kings", "SAS": "Spurs", "TOR": "Raptors", "UTA": "Jazz", "WAS": "Wizards"
+};
+
+const teamCities = {
+    "ATL": "Atlanta", "BOS": "Boston", "BKN": "Brooklyn", "CHA": "Charlotte", "CHI": "Chicago",
+    "CLE": "Cleveland", "DAL": "Dallas", "DEN": "Denver", "DET": "Detroit", "GSW": "Golden State",
+    "HOU": "Houston", "IND": "Indiana", "LAC": "LA Los Angeles", "LAL": "LA Los Angeles",
+    "MEM": "Memphis", "MIA": "Miami", "MIL": "Milwaukee", "MIN": "Minnesota", "NOP": "New Orleans",
+    "NYK": "New York NY", "OKC": "Oklahoma City", "ORL": "Orlando", "PHI": "Philadelphia",
+    "PHX": "Phoenix", "POR": "Portland", "SAC": "Sacramento", "SAS": "San Antonio",
+    "TOR": "Toronto", "UTA": "Utah", "WAS": "Washington"
+};
+
+const espnLogos = {
+    "GSW": "gs", "NOP": "no", "NYK": "ny", "SAS": "sa", "UTA": "utah", "WAS": "wsh"
+};
+
 async function initDashboard() {
     try {
         await Promise.all([
@@ -194,13 +218,13 @@ function renderMetrics() {
             <div class="metric-icon">🔥</div>
             <h3>Top Proj. Scorer</h3>
             <div class="value" style="font-size: 1.6rem; padding-top: 0.5rem;">${topScorer ? topScorer.PLAYER_NAME : 'N/A'}</div>
-            <div class="subtext">${topScorer ? parseFloat(topScorer.PREDICTED_PTS).toFixed(1) + ' PTS (' + topScorer.TEAM + ')' : '--'}</div>
+            <div class="subtext">${topScorer ? parseFloat(topScorer.PREDICTED_PTS).toFixed(1) + ' PTS (' + (teamNames[topScorer.TEAM.trim().toUpperCase()] || topScorer.TEAM) + ')' : '--'}</div>
         </div>
         <div class="metric-card orange">
             <div class="metric-icon">⚡</div>
             <h3>Top Overall (PRA)</h3>
             <div class="value" style="font-size: 1.6rem; padding-top: 0.5rem;">${topPra ? topPra.PLAYER_NAME : 'N/A'}</div>
-            <div class="subtext">${topPra ? parseFloat(topPra.PREDICTED_PRA).toFixed(1) + ' PRA (' + topPra.TEAM + ')' : '--'}</div>
+            <div class="subtext">${topPra ? parseFloat(topPra.PREDICTED_PRA).toFixed(1) + ' PRA (' + (teamNames[topPra.TEAM.trim().toUpperCase()] || topPra.TEAM) + ')' : '--'}</div>
         </div>
     `;
 }
@@ -226,12 +250,23 @@ function renderGames() {
 
     // Filter by Search Query
     if (gameSearchQuery) {
-        filteredGames = filteredGames.filter(g =>
-            g.HOME_TEAM.toLowerCase().includes(gameSearchQuery) ||
-            g.AWAY_TEAM.toLowerCase().includes(gameSearchQuery) ||
-            `${g.HOME_TEAM} vs ${g.AWAY_TEAM}`.toLowerCase().includes(gameSearchQuery) ||
-            `${g.AWAY_TEAM} @ ${g.HOME_TEAM}`.toLowerCase().includes(gameSearchQuery)
-        );
+        const queryTokens = gameSearchQuery.toLowerCase().trim().split(/\s+/);
+        filteredGames = filteredGames.filter(g => {
+            const hClean = g.HOME_TEAM.trim().toUpperCase();
+            const aClean = g.AWAY_TEAM.trim().toUpperCase();
+
+            const hCity = (teamCities[hClean] || '').toLowerCase();
+            const hName = (teamNames[hClean] || '').toLowerCase();
+            const hTri = hClean.toLowerCase();
+
+            const aCity = (teamCities[aClean] || '').toLowerCase();
+            const aName = (teamNames[aClean] || '').toLowerCase();
+            const aTri = aClean.toLowerCase();
+
+            const combinedStr = `${hTri} ${hCity} ${hName} vs @ ${aTri} ${aCity} ${aName}`;
+
+            return queryTokens.every(t => combinedStr.includes(t));
+        });
     }
 
     // Sort games chronologically by date first, then by tip-off time
@@ -278,8 +313,13 @@ function renderGames() {
         return `
             <div class="game-card">
                 <div class="team home">
-                    <div class="team-name">${g.HOME_TEAM}</div>
-                    <div class="team-role">★ Home</div>
+                    <div style="display: flex; align-items: center; justify-content: flex-start; gap: 0.8rem;">
+                        <img src="https://a.espncdn.com/i/teamlogos/nba/500/scoreboard/${(espnLogos[g.HOME_TEAM.trim().toUpperCase()] || g.HOME_TEAM.trim()).toLowerCase()}.png" alt="${g.HOME_TEAM}" style="width: 40px; height: 40px; object-fit: contain;">
+                        <div>
+                            <div class="team-name">${teamNames[g.HOME_TEAM.trim().toUpperCase()] || g.HOME_TEAM}</div>
+                            <div class="team-role" style="text-align: left;">★ Home</div>
+                        </div>
+                    </div>
                 </div>
                 <div class="match-info">
                     <div class="time-badge" style="padding: 0.5rem 1rem; ${!isToday ? 'background: var(--accent-blue);' : ''}">
@@ -289,8 +329,13 @@ function renderGames() {
                     <div class="vs">VS</div>
                 </div>
                 <div class="team away">
-                    <div class="team-name">${g.AWAY_TEAM}</div>
-                    <div class="team-role">Away ↗</div>
+                    <div style="display: flex; align-items: center; justify-content: flex-end; gap: 0.8rem;">
+                        <img src="https://a.espncdn.com/i/teamlogos/nba/500/scoreboard/${(espnLogos[g.AWAY_TEAM.trim().toUpperCase()] || g.AWAY_TEAM.trim()).toLowerCase()}.png" alt="${g.AWAY_TEAM}" style="width: 40px; height: 40px; object-fit: contain;">
+                        <div style="text-align: right;">
+                            <div class="team-name">${teamNames[g.AWAY_TEAM.trim().toUpperCase()] || g.AWAY_TEAM}</div>
+                            <div class="team-role">Away ↗</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -311,7 +356,16 @@ function renderProjectionList(container, limit, overrideStat = null) {
     let validPlayers = projectionsData.filter(p => !isNaN(parseFloat(p[statCol])));
 
     if (searchQuery && !overrideStat) { // Don't filter slideshow by search
-        validPlayers = validPlayers.filter(p => p.PLAYER_NAME.toLowerCase().includes(searchQuery));
+        const queryTokens = searchQuery.toLowerCase().trim().split(/\s+/);
+        validPlayers = validPlayers.filter(p => {
+            const tClean = p.TEAM.trim().toUpperCase();
+            const tCity = (teamCities[tClean] || '').toLowerCase();
+            const tName = (teamNames[tClean] || '').toLowerCase();
+            const tTri = tClean.toLowerCase();
+            const combinedStr = `${p.PLAYER_NAME.toLowerCase()} ${tTri} ${tCity} ${tName}`;
+
+            return queryTokens.every(t => combinedStr.includes(t));
+        });
     }
 
     validPlayers.sort((a, b) => parseFloat(b[statCol]) - parseFloat(a[statCol]));
@@ -384,7 +438,7 @@ function renderProjectionList(container, limit, overrideStat = null) {
             <div class="player-card">
                 <div class="player-info">
                     <h4>${p.PLAYER_NAME}</h4>
-                    <p>${p.TEAM} vs ${p.OPPONENT}</p>
+                    <p>${teamNames[p.TEAM.trim().toUpperCase()] || p.TEAM} vs ${teamNames[p.OPPONENT.trim().toUpperCase()] || p.OPPONENT}</p>
                     <div class="stat-grid">
                         ${microHtml}
                     </div>
