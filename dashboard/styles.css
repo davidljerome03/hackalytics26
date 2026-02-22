@@ -6,13 +6,22 @@
     --border-color: #e2e8f0;
 
     --nav-bg: #1e1b4b;
-    /* Deep dark blue for header */
     --nav-text: #f8fafc;
 
     --accent-blue: #3b82f6;
     --accent-green: #10b981;
     --accent-purple: #8b5cf6;
     --accent-orange: #f59e0b;
+}
+
+body.dark-mode {
+    --bg-color: #0f172a;
+    --card-bg: #1e293b;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --border-color: #334155;
+
+    --nav-bg: #0b0f19;
 }
 
 * {
@@ -408,10 +417,10 @@ body {
 }
 
 .player-card {
-    background: #f8fafc;
+    background: var(--bg-color);
     border-radius: 12px;
     padding: 1.2rem;
-    border: 1px solid #f1f5f9;
+    border: 1px solid var(--border-color);
     display: flex;
     justify-content: space-between;
     transition: transform 0.2s, background 0.2s;
@@ -419,8 +428,8 @@ body {
 
 .player-card:hover {
     transform: translateX(4px);
-    background: #f1f5f9;
-    border-color: var(--border-color);
+    background: var(--card-bg);
+    border-color: var(--accent-blue);
 }
 
 .player-info h4 {
@@ -444,7 +453,7 @@ body {
 
 .micro-stat {
     font-size: 0.75rem;
-    background: white;
+    background: var(--card-bg);
     padding: 0.3rem 0.6rem;
     border-radius: 6px;
     border: 1px solid var(--border-color);
@@ -513,8 +522,8 @@ body {
     appearance: none;
     -webkit-appearance: none;
     -moz-appearance: none;
-    background-color: #f8fafc;
-    border: 1px solid #cbd5e1;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 0.8rem 2.8rem 0.8rem 1.2rem;
     font-size: 0.95rem;
@@ -532,18 +541,19 @@ body {
 
 .stat-filter-select:hover {
     border-color: var(--accent-blue);
-    background-color: #ffffff;
+    background-color: var(--card-bg);
 }
 
 .stat-filter-select:focus {
     border-color: var(--accent-blue);
+    background-color: var(--card-bg);
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 /* Premium Search Input */
 .search-input {
-    background-color: #f8fafc;
-    border: 1px solid #cbd5e1;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 0.8rem 1rem 0.8rem 2.8rem;
     font-size: 0.95rem;
@@ -565,13 +575,13 @@ body {
 
 .search-input:hover {
     border-color: var(--accent-blue);
-    background-color: #ffffff;
+    background-color: var(--card-bg);
 }
 
 .search-input:focus {
     outline: none;
     border-color: var(--accent-blue);
-    background-color: #ffffff;
+    background-color: var(--card-bg);
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 

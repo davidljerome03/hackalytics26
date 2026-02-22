@@ -126,6 +126,35 @@ function setupEventListeners() {
         });
     }
 
+    // Theme Toggle
+    const themeBtn = document.getElementById('theme-toggle');
+    const lightIcon = document.getElementById('theme-icon-light');
+    const darkIcon = document.getElementById('theme-icon-dark');
+
+    // Check saved preference
+    if (localStorage.getItem('theme') === 'dark') {
+        document.body.classList.add('dark-mode');
+        lightIcon.style.display = 'block';
+        darkIcon.style.display = 'none';
+    }
+
+    if (themeBtn) {
+        themeBtn.addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+
+            if (isDark) {
+                lightIcon.style.display = 'block';
+                darkIcon.style.display = 'none';
+            } else {
+                lightIcon.style.display = 'none';
+                darkIcon.style.display = 'block';
+            }
+        });
+    }
+
     // SPA Navigation
     const navBtns = document.querySelectorAll('.nav-btn');
     navBtns.forEach(btn => {
