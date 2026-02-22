@@ -329,54 +329,56 @@ function renderProjectionList(container, limit, overrideStat = null) {
         const pAst = parseFloat(p.PREDICTED_AST).toFixed(1);
         const pPra = parseFloat(p.PREDICTED_PRA).toFixed(1);
 
+        const ptsRatio = p.BASELINE_5G_PTS ? (parseFloat(p.BASELINE_5G_PTS) / parseFloat(p.PREDICTED_PTS)) : 1;
+        const ptsBase = p.BASELINE_5G_PTS ? parseFloat(p.BASELINE_5G_PTS) : parseFloat(p.PREDICTED_PTS);
+        const rebBase = parseFloat(p.PREDICTED_REB) * ptsRatio;
+        const astBase = parseFloat(p.PREDICTED_AST) * ptsRatio;
+        const praBase = parseFloat(p.PREDICTED_PRA) * ptsRatio;
+
+        const ptsDiff = parseFloat((parseFloat(p.PREDICTED_PTS) - ptsBase).toFixed(1));
+        const rebDiff = parseFloat((parseFloat(p.PREDICTED_REB) - rebBase).toFixed(1));
+        const astDiff = parseFloat((parseFloat(p.PREDICTED_AST) - astBase).toFixed(1));
+        const praDiff = parseFloat((parseFloat(p.PREDICTED_PRA) - praBase).toFixed(1));
+
         let primaryVal = 0, primaryLabel = '';
         let microStats = [];
+        let activeDiff = 0;
 
         if (activeStat === 'PTS') {
-            primaryVal = pPts; primaryLabel = 'PTS';
-            microStats = [{ l: 'REB', v: pReb }, { l: 'AST', v: pAst }, { l: 'PRA', v: pPra }];
+            primaryVal = pPts; primaryLabel = 'PTS'; activeDiff = ptsDiff;
+            microStats = [{ l: 'REB', v: pReb, d: rebDiff }, { l: 'AST', v: pAst, d: astDiff }, { l: 'PRA', v: pPra, d: praDiff }];
         } else if (activeStat === 'REB') {
-            primaryVal = pReb; primaryLabel = 'REB';
-            microStats = [{ l: 'PTS', v: pPts }, { l: 'AST', v: pAst }, { l: 'PRA', v: pPra }];
+            primaryVal = pReb; primaryLabel = 'REB'; activeDiff = rebDiff;
+            microStats = [{ l: 'PTS', v: pPts, d: ptsDiff }, { l: 'AST', v: pAst, d: astDiff }, { l: 'PRA', v: pPra, d: praDiff }];
         } else if (activeStat === 'AST') {
-            primaryVal = pAst; primaryLabel = 'AST';
-            microStats = [{ l: 'PTS', v: pPts }, { l: 'REB', v: pReb }, { l: 'PRA', v: pPra }];
+            primaryVal = pAst; primaryLabel = 'AST'; activeDiff = astDiff;
+            microStats = [{ l: 'PTS', v: pPts, d: ptsDiff }, { l: 'REB', v: pReb, d: rebDiff }, { l: 'PRA', v: pPra, d: praDiff }];
         } else {
-            primaryVal = pPra; primaryLabel = 'PRA';
-            microStats = [{ l: 'PTS', v: pPts }, { l: 'REB', v: pReb }, { l: 'AST', v: pAst }];
-        }
-
-        const ptsRatio = p.BASELINE_5G_PTS ? (parseFloat(p.BASELINE_5G_PTS) / parseFloat(p.PREDICTED_PTS)) : 1;
-
-        let baseVal = 0;
-        let diff = 0;
-        if (activeStat === 'PTS') {
-            baseVal = p.BASELINE_5G_PTS ? parseFloat(p.BASELINE_5G_PTS) : parseFloat(p.PREDICTED_PTS);
-            diff = (parseFloat(p.PREDICTED_PTS) - baseVal).toFixed(1);
-        } else if (activeStat === 'REB') {
-            baseVal = parseFloat(p.PREDICTED_REB) * ptsRatio;
-            diff = (parseFloat(p.PREDICTED_REB) - baseVal).toFixed(1);
-        } else if (activeStat === 'AST') {
-            baseVal = parseFloat(p.PREDICTED_AST) * ptsRatio;
-            diff = (parseFloat(p.PREDICTED_AST) - baseVal).toFixed(1);
-        } else if (activeStat === 'PRA') {
-            baseVal = parseFloat(p.PREDICTED_PRA) * ptsRatio;
-            diff = (parseFloat(p.PREDICTED_PRA) - baseVal).toFixed(1);
+            primaryVal = pPra; primaryLabel = 'PRA'; activeDiff = praDiff;
+            microStats = [{ l: 'PTS', v: pPts, d: ptsDiff }, { l: 'REB', v: pReb, d: rebDiff }, { l: 'AST', v: pAst, d: astDiff }];
         }
 
         const upArrowSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; margin-top:2px;"><path d="M12 19V5M5 12l7-7 7 7"/></svg>`;
         const downArrowSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; margin-top:2px;"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>`;
+        const dashSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; margin-top:2px;"><rect x="4" y="10" width="16" height="4" rx="2" ry="2"/></svg>`;
 
         let diffIndicator = '';
-        if (diff > 0) {
-            diffIndicator = `<div class="proj-diff" style="color: var(--accent-green); display: flex; align-items: flex-start; margin-top: 0.8rem; font-size: 0.85rem; font-weight: 600;">${upArrowSvg}<span>${Math.abs(diff).toFixed(1)} projected difference</span></div>`;
-        } else if (diff < 0) {
-            diffIndicator = `<div class="proj-diff" style="color: #ef4444; display: flex; align-items: flex-start; margin-top: 0.8rem; font-size: 0.85rem; font-weight: 600;">${downArrowSvg}<span>${Math.abs(diff).toFixed(1)} projected difference</span></div>`;
+        if (activeDiff > 0) {
+            diffIndicator = `<div class="proj-diff" style="color: var(--accent-green); display: flex; align-items: flex-start; margin-top: 0.8rem; font-size: 0.85rem; font-weight: 600;">${upArrowSvg}<span>${Math.abs(activeDiff).toFixed(1)} projected difference</span></div>`;
+        } else if (activeDiff < 0) {
+            diffIndicator = `<div class="proj-diff" style="color: #ef4444; display: flex; align-items: flex-start; margin-top: 0.8rem; font-size: 0.85rem; font-weight: 600;">${downArrowSvg}<span>${Math.abs(activeDiff).toFixed(1)} projected difference</span></div>`;
         } else {
-            diffIndicator = `<div class="proj-diff" style="color: var(--text-secondary); margin-top: 0.8rem; font-size: 0.85rem; font-weight: 600;">Avg Match</div>`;
+            diffIndicator = `<div class="proj-diff" style="color: #3b82f6; display: flex; align-items: flex-start; margin-top: 0.8rem; font-size: 0.85rem; font-weight: 600;">${dashSvg}<span>Avg Match</span></div>`;
         }
 
-        const microHtml = microStats.map(m => `<div class="micro-stat">${m.l} <strong>${m.v}</strong></div>`).join('');
+        const microHtml = microStats.map(m => {
+            let hue = 'white';
+            let bd = 'var(--border-color)';
+            if (m.d > 0) { hue = 'rgba(34, 197, 94, 0.08)'; bd = 'rgba(34, 197, 94, 0.3)'; }
+            else if (m.d < 0) { hue = 'rgba(239, 68, 68, 0.08)'; bd = 'rgba(239, 68, 68, 0.3)'; }
+            else { hue = 'rgba(59, 130, 246, 0.08)'; bd = 'rgba(59, 130, 246, 0.3)'; }
+            return `<div class="micro-stat" style="background: ${hue}; border-color: ${bd};">${m.l} <strong>${m.v}</strong></div>`;
+        }).join('');
 
         return `
             <div class="player-card">
