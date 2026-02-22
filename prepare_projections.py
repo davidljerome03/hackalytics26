@@ -109,7 +109,16 @@ def prepare_and_run_projections():
         opponent = next_game['AWAY_TEAM'] if next_game['HOME_TEAM'] == team_abbr else next_game['HOME_TEAM']
         format_matchup = f"{team_abbr} vs. {opponent}" if next_game['HOME_TEAM'] == team_abbr else f"{team_abbr} @ {opponent}"
         
-        print(f"[{count+1}/{len(players_to_predict)}] Projecting {p_name} ({team_abbr}) vs {opponent} on {next_game['GAME_DATE'].date()}...")
+        # INJURY / INACTIVE FILTERING (14-DAY THRESHOLD)
+        last_game_date = pd.to_datetime(raw_df.iloc[-1]['GAME_DATE'])
+        next_game_date = pd.to_datetime(next_game['GAME_DATE'])
+        days_missed = (next_game_date - last_game_date).days
+        
+        if days_missed > 14:
+            print(f"Skipping {p_name} ({team_abbr}) - Inactive/Injured (missed {days_missed} days).")
+            continue
+            
+        print(f"[{count+1}/{len(players_to_predict)}] Projecting {p_name} ({team_abbr}) vs {opponent} on {next_game_date.date()}...")
         
         # 2. Append dummy row exactly like predict.py
         dummy_row = raw_df.iloc[-1:].copy()
