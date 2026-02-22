@@ -346,12 +346,37 @@ function renderProjectionList(container, limit, overrideStat = null) {
             microStats = [{ l: 'PTS', v: pPts }, { l: 'REB', v: pReb }, { l: 'AST', v: pAst }];
         }
 
-        const baseline = p.BASELINE_5G_PTS ? parseFloat(p.BASELINE_5G_PTS).toFixed(1) : pPts;
-        const diff = (parseFloat(p.PREDICTED_PTS) - baseline).toFixed(1);
-        const diffColor = diff > 0 ? 'var(--accent-green)' : (diff < 0 ? '#ef4444' : 'var(--text-secondary)');
-        const diffText = diff > 0 ? `+${diff}` : diff;
+        const ptsRatio = p.BASELINE_5G_PTS ? (parseFloat(p.BASELINE_5G_PTS) / parseFloat(p.PREDICTED_PTS)) : 1;
 
-        const microHtml = microStats.map(m => `<div class="micro-stat">${m.l}<strong>${m.v}</strong></div>`).join('');
+        let baseVal = 0;
+        let diff = 0;
+        if (activeStat === 'PTS') {
+            baseVal = p.BASELINE_5G_PTS ? parseFloat(p.BASELINE_5G_PTS) : parseFloat(p.PREDICTED_PTS);
+            diff = (parseFloat(p.PREDICTED_PTS) - baseVal).toFixed(1);
+        } else if (activeStat === 'REB') {
+            baseVal = parseFloat(p.PREDICTED_REB) * ptsRatio;
+            diff = (parseFloat(p.PREDICTED_REB) - baseVal).toFixed(1);
+        } else if (activeStat === 'AST') {
+            baseVal = parseFloat(p.PREDICTED_AST) * ptsRatio;
+            diff = (parseFloat(p.PREDICTED_AST) - baseVal).toFixed(1);
+        } else if (activeStat === 'PRA') {
+            baseVal = parseFloat(p.PREDICTED_PRA) * ptsRatio;
+            diff = (parseFloat(p.PREDICTED_PRA) - baseVal).toFixed(1);
+        }
+
+        const upArrowSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; margin-top:2px;"><path d="M12 19V5M5 12l7-7 7 7"/></svg>`;
+        const downArrowSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; margin-top:2px;"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>`;
+
+        let diffIndicator = '';
+        if (diff > 0) {
+            diffIndicator = `<div class="proj-diff" style="color: var(--accent-green); display: flex; align-items: flex-start; margin-top: 0.8rem; font-size: 0.85rem; font-weight: 600;">${upArrowSvg}<span>${Math.abs(diff).toFixed(1)} projected difference</span></div>`;
+        } else if (diff < 0) {
+            diffIndicator = `<div class="proj-diff" style="color: #ef4444; display: flex; align-items: flex-start; margin-top: 0.8rem; font-size: 0.85rem; font-weight: 600;">${downArrowSvg}<span>${Math.abs(diff).toFixed(1)} projected difference</span></div>`;
+        } else {
+            diffIndicator = `<div class="proj-diff" style="color: var(--text-secondary); margin-top: 0.8rem; font-size: 0.85rem; font-weight: 600;">Avg Match</div>`;
+        }
+
+        const microHtml = microStats.map(m => `<div class="micro-stat">${m.l} <strong>${m.v}</strong></div>`).join('');
 
         return `
             <div class="player-card">
@@ -361,12 +386,10 @@ function renderProjectionList(container, limit, overrideStat = null) {
                     <div class="stat-grid">
                         ${microHtml}
                     </div>
+                    ${diffIndicator}
                 </div>
                 <div class="player-stats">
-                    <div class="stat-primary">${primaryVal} ${primaryLabel}</div>
-                    <div class="stat-secondary" style="color: ${activeStat === 'PTS' ? diffColor : 'var(--text-secondary)'}">
-                        ${activeStat === 'PTS' ? (diff == 0 ? 'Avg Match' : `${diffText} proj diff`) : ''}
-                    </div>
+                    <div class="stat-primary">${primaryVal} <br/> <span style="font-size: 1.2rem; color: var(--accent-orange); opacity: 0.9;">${primaryLabel}</span></div>
                 </div>
             </div>
         `;
@@ -395,7 +418,7 @@ function renderSlideshowTick() {
     if (stat === 'PTS') label = 'Points (PTS)';
     if (stat === 'REB') label = 'Rebounds (REB)';
     if (stat === 'AST') label = 'Assists (AST)';
-    if (stat === 'PRA') label = 'PRA';
+    if (stat === 'PRA') label = 'PRA (Pts + Reb + Ast)';
 
     // Fade out
     listEl.style.opacity = '0';
